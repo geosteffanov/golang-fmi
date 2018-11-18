@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/fmi/go-homework/geom"
+	"math"
 )
 
 type Triangle struct {
@@ -45,11 +46,16 @@ func (tr *Triangle) Intersect(ray geom.Ray) bool {
 		return false
 	}
 
+	if !tr.rayPointsTowardsPlane(ray) {
+		return false
+	}
+
 	// ray is not parallel to plane
 	// => ray intersects plane
 	// find intersection point
 	// t is the value of the parameter t in the equation for the ray
-	t := dotProduct(vectorDiff(ray.Origin, tr.a), normalVector)
+	t := dotProduct(vectorDiff(tr.a, ray.Origin), normalVector)
+
 
 	intersectionPoint := vectorSum(ray.Origin, multiplyByScalar(t, ray.Direction))
 
@@ -109,4 +115,71 @@ func (tr *Triangle) inside(vector geom.Vector) bool {
 
 func determinant(mat [][]float64) float64 {
 	return mat[0][0]*mat[1][1] - mat[0][1]*mat[1][0]
+}
+
+// This function returns the distance from a point to the plane
+// in which the triangle lies.
+func (tr *Triangle) distanceFromPointToPlane(point geom.Vector) float64 {
+	// Given a plane equation: Ax + By + Cz + D = 0
+	// and a point <x1,y1,z1> in space, the distance
+	// from the point to the plane can be found by
+	// the following formula:
+	//
+	// d = | Ax1 + By1 + Cz1 + D | /  sqrt(A^2 + B^2+C^2)
+	//
+
+	// First we calculate A,B,C,D
+
+	// The plane is defined as (P - A) * n = 0
+	// where n is the normal unit vector of the plane
+	// and A is one of the vertices of the triangle.
+
+	// If we write down P = <x,y,z>
+	// and A = <xA,yA,zA>, and n = <N1, N2, N3>
+	// P * n - A*n = 0 is therefore equivalent to
+	//
+	// N1.x + N2.y + N3.z - A*n = 0
+	// Hence A=N1, B=N2, C=N3, D = -A*n
+	// from which we find A,B,C,D respectively.
+
+	// Since d = | Ax1 + By1 + Cz1 + D | /  sqrt(A^2 + B^2+C^2)
+	// we see that we can actually write this down as
+
+	// d = | n * <x1, y1, z1>  - A*n | / |n|,
+	// and since we use a normalized n
+	// |n| = 1
+	// hence,
+	// d = | n * (<x1, y1,z1> - A) |
+
+	normalVector := tr.normalVector()
+	//D := -1 * dotProduct(normalVector, tr.a)
+
+	diff := vectorDiff(point, tr.a)
+
+	return math.Abs(dotProduct(normalVector, diff))
+
+}
+
+// utility function that checks whether a given ray points outwards of a plane
+// if a ray points outwards, then it can't possibly intersect the plane
+func (tr *Triangle) rayPointsTowardsPlane(ray geom.Ray) bool {
+	// if the origin is on the plane we return true
+	if tr.inPlane(ray.Origin) {
+		return true
+	}
+
+	distanceFromOriginToPlane := tr.distanceFromPointToPlane(ray.Origin)
+	normalizedDirection := normalize(ray.Direction)
+	halfDistance := distanceFromOriginToPlane / 2
+	reducedDirection := multiplyByScalar(halfDistance, normalizedDirection)
+
+	smallIncrement := vectorSum(ray.Origin, reducedDirection)
+	distanceFromIncrementedPoint := tr.distanceFromPointToPlane(smallIncrement)
+
+	return distanceFromIncrementedPoint < distanceFromOriginToPlane
+}
+
+// point is on the plane of the triangle
+func (tr *Triangle) inPlane(point geom.Vector) bool {
+	return dotProduct(vectorDiff(point, tr.a), tr.normalVector()) == 0
 }
